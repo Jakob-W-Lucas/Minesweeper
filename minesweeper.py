@@ -14,6 +14,9 @@ pygame.init()
 grid_size = [18, 15]
 # Percentage of mines in the grid
 mine_density = 0.14
+# Remaining mines in the grid
+total_mines = math.floor(mine_density * grid_size[0] * grid_size[1])
+
 # Size of each cell
 cell_size = 8
 # Scale size for each game pixel
@@ -73,9 +76,6 @@ rs_w = restart_image.get_width() * pixel_size
 game_over_image_pos = [(SCREEN_WIDTH - go_w - rs_w) // 2, (SCREEN_HEIGHT - go_h) // 2]
 restart_image_pos = [(SCREEN_WIDTH - rs_w + go_w) // 2, (SCREEN_HEIGHT - rs_h) // 2]
 
-# All the current cells in the grid
-cells = []
-
 class Cell(pygame.sprite.Sprite):
     def __init__(self, x, y, location: tuple[int, int]):
         pygame.sprite.Sprite.__init__(self)
@@ -116,6 +116,152 @@ class Cell(pygame.sprite.Sprite):
             self.image = s_FLAG
         
         self.flagged = not self.flagged
+        
+class Game():
+    
+    def __init__(self):
+        self.cells = []
+        self.initialise_cells()
+        self.game_over = False
+        # Get all the cells with numbers, 1 loop over cell array at start
+        self.total_cells_to_mine = grid_size[0] * grid_size[1] - total_mines
+        
+    def initialise_cells(self):
+        
+        # Reset cells
+        self.cells.clear()
+        
+        # Create each sprite in the grid
+        for i in range(grid_size[1]):
+            
+            row = pygame.sprite.Group()
+            
+            y = cell_lw * (i + 0.5) + line_size * (i + 1)
+            
+            for j in range(grid_size[0]):
+                
+                x = cell_lw * (j + 0.5) + line_size * (j + 1)
+                # Create the cell and add it to the row
+                cell = Cell(x, y, (i, j))
+                row.add(cell)
+                
+            self.cells.append(row)
+            
+        self.generate_grid()
+        
+    def mine_cells(self, x: int, y: int):
+        
+        cell = self.get_cell(x, y)
+        
+        if not cell:
+            return
+        
+        if cell.mined:
+            return
+        
+        cell.mine_cell()
+        
+        if cell.is_mine:
+            self.game_over = True
+            return
+        
+        if cell.surrounding_mines == 0:
+            self.total_cells_to_mine -= self.clear_cells(cell.column, cell.row)
+            self.total_cells_to_mine -= 1
+        else:
+            self.total_cells_to_mine -= 1
+    
+    def flag_cells(self, x: int, y: int):
+        
+        cell = self.get_cell(x, y)
+        
+        if not cell:
+            return
+            
+        cell.flag_cell()
+        
+    def get_surrounding_cells(self, c_centre: int, r_centre) -> tuple[Cell]:
+    
+        surrounding_cells = []
+        
+        for column in range(-1, 2):
+            for row in range(-1, 2):
+                if c_centre + column < 0 or r_centre + row < 0 or\
+                    c_centre + column > grid_size[1] - 1 or r_centre + row > grid_size[0] - 1:
+                    continue
+                
+                surrounding_cells.append(self.cells[c_centre + column].sprites()[r_centre + row])
+                
+        return surrounding_cells
+
+    # Increase the surrounding mines for each cell
+    def increment_surrounding_cells(self, c: int, r: int):
+        
+        s_cells = self.get_surrounding_cells(c, r)
+        for cell in s_cells:
+            cell.surrounding_mines += 1
+
+    def get_randomized_cells(self) -> tuple[Cell]:
+        print(len(self.cells))
+        random_cells = []
+        for i in range(grid_size[1]):
+            for j in range(grid_size[0]):
+                random_cells.append(self.cells[i].sprites()[j])
+        random.shuffle(random_cells)
+        
+        return random_cells
+
+    def generate_grid(self):
+        
+        # Spawn mines and update cells
+        random_cells = self.get_randomized_cells()
+        current_mine_count = total_mines
+        
+        while current_mine_count > 0:
+            cell = random_cells.pop()
+            
+            cell.is_mine = True
+            self.increment_surrounding_cells(cell.column, cell.row)
+            
+            current_mine_count -= 1
+
+    # Returns the cell based on coords from the screen
+    def get_cell(self, x: int, y: int) -> Cell:
+        
+        # Calculate which cell has been clicked
+        row = x // (cell_lw + line_size)
+        column = y // (cell_lw + line_size)
+        
+        if row >= grid_size[0] or column >= grid_size[1] or\
+            row < 0 or column < 0:
+            return None
+        
+        return self.cells[column].sprites()[row]
+
+    # Clears the surrounding empty cells
+    def clear_cells(self, c: int, r: int) -> int:
+        
+        # Get each surrounding cell
+        s_cells = self.get_surrounding_cells(c, r)
+        cleared = 0
+        
+        for cell in s_cells:
+            if cell.mined or cell.is_mine:
+                continue
+            
+            cell.mine_cell()
+            cleared += 1
+            
+            if cell.surrounding_mines == 0:
+                cleared += self.clear_cells(cell.column, cell.row)
+                
+        return cleared
+
+    def restart(self) -> bool:
+        self.initialise_cells()
+        self.game_over = False
+        self.total_cells_to_mine = grid_size[0] * grid_size[1] - total_mines
+    
 
 # Draws the minesweeper grid
 def draw_grid():
@@ -131,139 +277,38 @@ def draw_grid():
     for i in range(grid_size[1] + 1):
         # Each horizontal line in the grid
         pygame.draw.line(screen, CRT_GREY, (0, square * i), (SCREEN_WIDTH, square * i), line_size)
-        
-def get_surrounding_cells(c_centre: int, r_centre) -> tuple[Cell]:
-    
-    surrounding_cells = []
-    
-    for column in range(-1, 2):
-        for row in range(-1, 2):
-            if c_centre + column < 0 or r_centre + row < 0 or\
-                c_centre + column > grid_size[1] - 1 or r_centre + row > grid_size[0] - 1:
-                continue
-            
-            surrounding_cells.append(cells[c_centre + column].sprites()[r_centre + row])
-            
-    return surrounding_cells
-
-# Increase the surrounding mines for each cell
-def increment_surrounding_cells(c: int, r: int):
-    
-    s_cells = get_surrounding_cells(c, r)
-    for cell in s_cells:
-        cell.surrounding_mines += 1
-
-mine_count = math.floor(mine_density * grid_size[0] * grid_size[1])
-
-def get_randomized_cells() -> tuple[Cell]:
-    random_cells = []
-    for i in range(grid_size[1]):
-        for j in range(grid_size[0]):
-            random_cells.append(cells[i].sprites()[j])
-    random.shuffle(random_cells)
-    
-    return random_cells
-
-def generate_grid():
-    # Spawn mines and update cells
-    random_cells = get_randomized_cells()
-    current_mine_count = mine_count
-    
-    while current_mine_count > 0:
-        cell = random_cells.pop()
-        
-        cell.is_mine = True
-        increment_surrounding_cells(cell.column, cell.row)
-        
-        current_mine_count -= 1
-        
-
-def initialise_cells():
-    
-    # Reset cells
-    cells.clear()
-    
-    # Create each sprite in the grid
-    for i in range(grid_size[1]):
-        
-        row = pygame.sprite.Group()
-        
-        y = cell_lw * (i + 0.5) + line_size * (i + 1)
-        
-        for j in range(grid_size[0]):
-            
-            x = cell_lw * (j + 0.5) + line_size * (j + 1)
-            # Create the cell and add it to the row
-            cell = Cell(x, y, (i, j))
-            row.add(cell)
-            
-        cells.append(row)
-    
-    generate_grid()
-
-# Returns the cell based on coords from the screen
-def get_cell(x: int, y: int) -> tuple[int, int]:
-    
-    # Calculate which cell has been clicked
-    cell_x = x // (cell_lw + line_size)
-    cell_y = y // (cell_lw + line_size)
-    
-    return [cell_x, cell_y]
-
-# Clears the surrounding empty cells
-def clear_cells(c: int, r: int):
-    
-    # Get each surrounding cell
-    s_cells = get_surrounding_cells(c, r)
-    
-    for cell in s_cells:
-        if cell.mined or cell.is_mine:
-            continue
-        
-        if not cell.is_mine:
-            cell.mine_cell()
-        
-        if cell.surrounding_mines == 0:
-            clear_cells(cell.column, cell.row)
-        
 
 # Mouse buttons
 m_LEFT = 1
 m_RIGHT = 3
 
-game_over = False
-
-def restart(x: int, y: int) -> bool:
-    if x >= restart_image_pos[0] and x <= restart_image_pos[0] + rs_w and\
-        y >= restart_image_pos[1] and y <= restart_image_pos[1] + rs_h:
-            
-            # Reset cells
-            initialise_cells()
-            return False
-    return True
-            
 run = True
+game = None
+
 # Game loop
 while run:
-    
-    if len(cells) == 0:
-        initialise_cells()
         
     # Create the screen background
     screen.fill(CRT_BLACK)
     
+    if game == None:
+        game = Game()
+    
     # Display Grid
     draw_grid()
     
-    for row in cells:
+    for row in game.cells:
         # Update each cell in the grid
         row.update()
         # Draw each cell sprite in the grid
         row.draw(screen)
         
-    if game_over:
+    if game.game_over:
         screen.blit(s_GAMEOVER, (game_over_image_pos[0], game_over_image_pos[1]))
         screen.blit(s_RESTART, (restart_image_pos[0], restart_image_pos[1]))
+    
+    if game.total_cells_to_mine == 0:
+        print("You win!")
     
     # Get key presses
     key = pygame.key.get_pressed()
@@ -278,29 +323,19 @@ while run:
         if event.type == pygame.MOUSEBUTTONDOWN:
             
             pos = pygame.mouse.get_pos()
-            
-            if game_over:
-                game_over = restart(pos[0], pos[1])
+            print(game.total_cells_to_mine)
+            if game.game_over:
+                if pos[0] >= restart_image_pos[0] and pos[0] <= restart_image_pos[0] + rs_w and\
+                    pos[1] >= restart_image_pos[1] and pos[1] <= restart_image_pos[1] + rs_h:
+                        # Reset cells
+                        game.restart()
                 continue
-            
-            r, c = get_cell(pos[0], pos[1])
-            
-            if r > grid_size[0] - 1 or c > grid_size[1] - 1 or\
-                r < 0 or c < 0:
-                continue
-            
-            cell = cells[c].sprites()[r]
             
             if event.button == m_LEFT:
-                cell.mine_cell()
-                
-                if cell.is_mine:
-                    game_over = True
-                
-                if not cell.is_mine and cell.surrounding_mines == 0:
-                    clear_cells(c, r)
+                game.mine_cells(pos[0], pos[1])
+                    
             elif event.button == m_RIGHT:
-                cell.flag_cell()
+                game.flag_cells(pos[0], pos[1])
       
         if event.type == pygame.QUIT:
             run = False
