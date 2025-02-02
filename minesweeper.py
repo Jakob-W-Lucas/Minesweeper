@@ -39,6 +39,8 @@ pygame.display.set_caption('Minesweeper')
 
 # Load the sprite sheet
 sprite_sheet_image = pygame.image.load('minesweeper_sprites.png').convert_alpha()
+game_over_image = pygame.image.load('game_over_sprite.png').convert_alpha()
+restart_image = pygame.image.load('restart_sprite.png').convert_alpha()
 
 # Get the individual images from the sprite sheet
 def get_image(sheet, frame_x, frame_y, width, height, scale, color):
@@ -54,9 +56,22 @@ def get_image(sheet, frame_x, frame_y, width, height, scale, color):
     return image
 
 # Images:
-s_CELL = get_image(sprite_sheet_image, 0, 1, 8, 8, pixel_size, BLACK)
-s_FLAG = get_image(sprite_sheet_image, 1, 1, 8, 8, pixel_size, BLACK)
-s_MINE = get_image(sprite_sheet_image, 2, 1, 8, 8, pixel_size, BLACK)
+s_CELL = get_image(sprite_sheet_image, 10, 0, 8, 8, pixel_size, BLACK)
+s_FLAG = get_image(sprite_sheet_image, 11, 0, 8, 8, pixel_size, BLACK)
+s_MINE = get_image(sprite_sheet_image, 12, 0, 8, 8, pixel_size, BLACK)
+s_GAMEOVER = get_image(game_over_image, 0, 0, 31, 19, pixel_size, BLACK)
+s_RESTART = get_image(restart_image, 0, 0, 19, 19, pixel_size, BLACK)
+
+# Get dimensions of the game over image
+go_h = game_over_image.get_height() * pixel_size
+go_w = game_over_image.get_width() * pixel_size
+
+rs_h = restart_image.get_height() * pixel_size
+rs_w = restart_image.get_width() * pixel_size
+
+# Draw image in the centre of the screen
+game_over_image_pos = [(SCREEN_WIDTH - go_w - rs_w) // 2, (SCREEN_HEIGHT - go_h) // 2]
+restart_image_pos = [(SCREEN_WIDTH - rs_w + go_w) // 2, (SCREEN_HEIGHT - rs_h) // 2]
 
 # All the current cells in the grid
 cells = []
@@ -74,6 +89,7 @@ class Cell(pygame.sprite.Sprite):
         self.surrounding_mines = 0
         
         self.mined = False
+        self.flagged = False
         
     def mine_cell(self):
         
@@ -85,16 +101,21 @@ class Cell(pygame.sprite.Sprite):
             self.image.fill(CRT_BLACK)
         elif self.is_mine:
             self.image = s_MINE
-            # Game over
         else:
             self.image = get_image(sprite_sheet_image, self.surrounding_mines - 1, 0, 8, 8, pixel_size, BLACK)
     
     def flag_cell(self):
         
-        if self.mined == True:
+        if self.mined:
             return
         
-        self.image = s_FLAG
+        # Switch between a flag and a cell
+        if self.flagged:
+            self.image = s_CELL
+        else:
+            self.image = s_FLAG
+        
+        self.flagged = not self.flagged
 
 # Draws the minesweeper grid
 def draw_grid():
@@ -158,6 +179,10 @@ def generate_grid():
         
 
 def initialise_cells():
+    
+    # Reset cells
+    cells.clear()
+    
     # Create each sprite in the grid
     for i in range(grid_size[1]):
         
@@ -185,8 +210,10 @@ def get_cell(x: int, y: int) -> tuple[int, int]:
     
     return [cell_x, cell_y]
 
+# Clears the surrounding empty cells
 def clear_cells(c: int, r: int):
     
+    # Get each surrounding cell
     s_cells = get_surrounding_cells(c, r)
     
     for cell in s_cells:
@@ -198,11 +225,23 @@ def clear_cells(c: int, r: int):
         
         if cell.surrounding_mines == 0:
             clear_cells(cell.column, cell.row)
+        
 
 # Mouse buttons
 m_LEFT = 1
 m_RIGHT = 3
 
+game_over = False
+
+def restart(x: int, y: int) -> bool:
+    if x >= restart_image_pos[0] and x <= restart_image_pos[0] + rs_w and\
+        y >= restart_image_pos[1] and y <= restart_image_pos[1] + rs_h:
+            
+            # Reset cells
+            initialise_cells()
+            return False
+    return True
+            
 run = True
 # Game loop
 while run:
@@ -221,6 +260,10 @@ while run:
         row.update()
         # Draw each cell sprite in the grid
         row.draw(screen)
+        
+    if game_over:
+        screen.blit(s_GAMEOVER, (game_over_image_pos[0], game_over_image_pos[1]))
+        screen.blit(s_RESTART, (restart_image_pos[0], restart_image_pos[1]))
     
     # Get key presses
     key = pygame.key.get_pressed()
@@ -235,6 +278,11 @@ while run:
         if event.type == pygame.MOUSEBUTTONDOWN:
             
             pos = pygame.mouse.get_pos()
+            
+            if game_over:
+                game_over = restart(pos[0], pos[1])
+                continue
+            
             r, c = get_cell(pos[0], pos[1])
             
             if r > grid_size[0] - 1 or c > grid_size[1] - 1 or\
@@ -245,6 +293,9 @@ while run:
             
             if event.button == m_LEFT:
                 cell.mine_cell()
+                
+                if cell.is_mine:
+                    game_over = True
                 
                 if not cell.is_mine and cell.surrounding_mines == 0:
                     clear_cells(c, r)
