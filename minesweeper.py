@@ -44,6 +44,7 @@ pygame.display.set_caption('Minesweeper')
 sprite_sheet_image = pygame.image.load('minesweeper_sprites.png').convert_alpha()
 game_over_image = pygame.image.load('game_over_sprite.png').convert_alpha()
 restart_image = pygame.image.load('restart_sprite.png').convert_alpha()
+win_image = pygame.image.load('win_sprite.png').convert_alpha()
 
 # Get the individual images from the sprite sheet
 def get_image(sheet, frame_x, frame_y, width, height, scale, color):
@@ -64,16 +65,21 @@ s_FLAG = get_image(sprite_sheet_image, 11, 0, 8, 8, pixel_size, BLACK)
 s_MINE = get_image(sprite_sheet_image, 12, 0, 8, 8, pixel_size, BLACK)
 s_GAMEOVER = get_image(game_over_image, 0, 0, 31, 19, pixel_size, BLACK)
 s_RESTART = get_image(restart_image, 0, 0, 19, 19, pixel_size, BLACK)
+s_WIN = get_image(win_image, 0, 0, 32, 19, pixel_size, BLACK)
 
 # Get dimensions of the game over image
 go_h = game_over_image.get_height() * pixel_size
 go_w = game_over_image.get_width() * pixel_size
+
+win_h = win_image.get_height() * pixel_size
+win_w = win_image.get_width() * pixel_size
 
 rs_h = restart_image.get_height() * pixel_size
 rs_w = restart_image.get_width() * pixel_size
 
 # Draw image in the centre of the screen
 game_over_image_pos = [(SCREEN_WIDTH - go_w - rs_w) // 2, (SCREEN_HEIGHT - go_h) // 2]
+win_image_pos = [(SCREEN_WIDTH - win_w - rs_w) // 2, (SCREEN_HEIGHT - win_h) // 2]
 restart_image_pos = [(SCREEN_WIDTH - rs_w + go_w) // 2, (SCREEN_HEIGHT - rs_h) // 2]
 
 class Cell(pygame.sprite.Sprite):
@@ -308,7 +314,8 @@ while run:
         screen.blit(s_RESTART, (restart_image_pos[0], restart_image_pos[1]))
     
     if game.total_cells_to_mine == 0:
-        print("You win!")
+        screen.blit(s_WIN, (win_image_pos[0], win_image_pos[1]))
+        screen.blit(s_RESTART, (restart_image_pos[0], restart_image_pos[1]))
     
     # Get key presses
     key = pygame.key.get_pressed()
@@ -324,7 +331,7 @@ while run:
             
             pos = pygame.mouse.get_pos()
             print(game.total_cells_to_mine)
-            if game.game_over:
+            if game.game_over or game.total_cells_to_mine == 0:
                 if pos[0] >= restart_image_pos[0] and pos[0] <= restart_image_pos[0] + rs_w and\
                     pos[1] >= restart_image_pos[1] and pos[1] <= restart_image_pos[1] + rs_h:
                         # Reset cells
