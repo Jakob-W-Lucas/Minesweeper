@@ -75,7 +75,7 @@ class Cell(pygame.sprite.Sprite):
         
         self.mined = False
         
-    def left_clicked(self):
+    def mine_cell(self):
         
         self.mined = True
          
@@ -88,9 +88,8 @@ class Cell(pygame.sprite.Sprite):
             # Game over
         else:
             self.image = get_image(sprite_sheet_image, self.surrounding_mines - 1, 0, 8, 8, pixel_size, BLACK)
-            print(f"surrounding mines: {self.surrounding_mines}")
     
-    def right_clicked(self):
+    def flag_cell(self):
         
         if self.mined == True:
             return
@@ -111,17 +110,27 @@ def draw_grid():
     for i in range(grid_size[1] + 1):
         # Each horizontal line in the grid
         pygame.draw.line(screen, CRT_GREY, (0, square * i), (SCREEN_WIDTH, square * i), line_size)
-
-def increment_surrounding_cells(c: int, r: int):
-    # Increase the surrounding mines for each cell
+        
+def get_surrounding_cells(c_centre: int, r_centre) -> tuple[Cell]:
+    
+    surrounding_cells = []
+    
     for column in range(-1, 2):
         for row in range(-1, 2):
-            if c + column < 0 or r + row < 0 or\
-                c + column > grid_size[1] - 1 or r + row > grid_size[0] - 1:
+            if c_centre + column < 0 or r_centre + row < 0 or\
+                c_centre + column > grid_size[1] - 1 or r_centre + row > grid_size[0] - 1:
                 continue
-            cells[c + column].sprites()[r + row].surrounding_mines += 1
             
-            print(f"Cell incrementing: {c}, {r}. Incrementing {c + column}, {r + row}")
+            surrounding_cells.append(cells[c_centre + column].sprites()[r_centre + row])
+            
+    return surrounding_cells
+
+# Increase the surrounding mines for each cell
+def increment_surrounding_cells(c: int, r: int):
+    
+    s_cells = get_surrounding_cells(c, r)
+    for cell in s_cells:
+        cell.surrounding_mines += 1
 
 mine_count = math.floor(mine_density * grid_size[0] * grid_size[1])
 
@@ -176,6 +185,20 @@ def get_cell(x: int, y: int) -> tuple[int, int]:
     
     return [cell_x, cell_y]
 
+def clear_cells(c: int, r: int):
+    
+    s_cells = get_surrounding_cells(c, r)
+    
+    for cell in s_cells:
+        if cell.mined or cell.is_mine:
+            continue
+        
+        if not cell.is_mine:
+            cell.mine_cell()
+        
+        if cell.surrounding_mines == 0:
+            clear_cells(cell.column, cell.row)
+
 # Mouse buttons
 m_LEFT = 1
 m_RIGHT = 3
@@ -221,9 +244,12 @@ while run:
             cell = cells[c].sprites()[r]
             
             if event.button == m_LEFT:
-                cell.left_clicked()
+                cell.mine_cell()
+                
+                if not cell.is_mine and cell.surrounding_mines == 0:
+                    clear_cells(c, r)
             elif event.button == m_RIGHT:
-                cell.right_clicked()
+                cell.flag_cell()
       
         if event.type == pygame.QUIT:
             run = False
