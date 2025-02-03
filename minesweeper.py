@@ -99,9 +99,12 @@ class Cell(pygame.sprite.Sprite):
         # If the cell has been mined or flagged
         self.mined = False
         self.flagged = False
+        
+        # Get a random flower for the cell to become if it is a mine
+        self.rand_flower = get_image(sprite_sheet_image, random.randint(13, 15), 0, 8, 8, pixel_size, BLACK)
     
     # Mine the cell
-    def mine_cell(self):
+    def mine_cell(self, win: bool = False):
         
         self.mined = True
          
@@ -109,6 +112,10 @@ class Cell(pygame.sprite.Sprite):
         if not self.is_mine and self.surrounding_mines == 0:
             self.image = pygame.Surface((cell_lw, cell_lw))
             self.image.fill(CRT_BLACK)
+        # Win condition
+        elif self.is_mine and win:
+            # Turn the mine into a random flower
+            self.image = self.rand_flower
         # Mine cell
         elif self.is_mine:
             self.image = s_MINE
@@ -223,6 +230,7 @@ class Game():
     # Get random positions on the grid for each mine
     def get_randomized_cells(self, first_cell_location: tuple) -> tuple[Cell]:
         
+        # Get the cells surrounding the first click
         first_cells = self.get_surrounding_cells(first_cell_location)
         
         random_cells = []
@@ -230,6 +238,7 @@ class Game():
             for j in range(grid_size[0]):
                 random_cells.append(self.cells[i].sprites()[j])
         
+        # Remove the first cells from the list to ensure no mines
         random_cells = [x for x in random_cells if x not in first_cells]
         random.shuffle(random_cells)
         
@@ -297,10 +306,10 @@ class Game():
         self.game_over = False
         self.total_cells_to_mine = grid_size[0] * grid_size[1] - total_mines
         
-    def clear_all(self) -> None:
+    def clear_all(self, win: bool = False) -> None:
         for column in self.cells:
             for cell in column.sprites():
-                cell.mine_cell()
+                cell.mine_cell(win)
     
 
 # Draws the minesweeper grid
@@ -348,14 +357,16 @@ while run:
     if game.game_over:
         screen.blit(s_GAMEOVER, (game_over_image_pos[0], game_over_image_pos[1]))
         screen.blit(s_RESTART, (restart_image_pos[0], restart_image_pos[1]))
-        game.clear_all()
+        
+        game.clear_all(False)
         
     
     # Display the win and restart screen
     if game.total_cells_to_mine == 0:
         screen.blit(s_WIN, (win_image_pos[0], win_image_pos[1]))
         screen.blit(s_RESTART, (restart_image_pos[0], restart_image_pos[1]))
-        game.clear_all()
+        
+        game.clear_all(True)
     
     # Get key presses
     key = pygame.key.get_pressed()
